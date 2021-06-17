@@ -38,7 +38,7 @@ class image_processing():
 
         self.img_sub=rospy.Subscriber('/robot/imagen',Image, self.read_img)
         self.img_pub=rospy.Publisher('/robot/cv_image',Image, queue_size=10)
-        self.data_pub=rospy.Publisher('/robot/camera_data',camera_data, queue_size=10)
+        self.data_pub=rospy.Publisher('/diff/camera_data',camera_data, queue_size=10)
 
         self.procesed_data = camera_data()
 
@@ -85,8 +85,10 @@ class image_processing():
         #metodo que lee la imagen cada 0.2s, procesa las posiciones de los objetos y las publica en un topic
         rate=rospy.Rate(5)
         while not self.image_flag:
+            rospy.loginfo('IMAGE_NODE: Waiting for camera feed.')
             rate.sleep()
         while not rospy.is_shutdown():
+            rospy.loginfo('IMAGE_NODE: Started publishing data.')
             start=time.time()
             img=self.image_data
             (c_r,area_r)=self.findCenter(img,self.low_thresh_red,self.high_thresh_red)
@@ -133,5 +135,6 @@ class image_processing():
 
 if __name__ == "__main__":
     rospy.init_node('image_node')
+    rospy.loginfo('IMAGE_NODE: Node started.')
     obj = image_processing()
     obj.process_data()

@@ -53,6 +53,7 @@ find_package(catkin REQUIRED COMPONENTS
    FILES
    color_pose.msg
    camera_data.msg
+   velocity_cmd.msg
  )
 
 ## Generate services in the 'srv' folder
