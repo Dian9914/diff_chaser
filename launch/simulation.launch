@@ -44,5 +44,11 @@
   <!-- Arrancar arbotix_gui redireccionando el topico que genera a /robot/cmd_vel -->
 
   <node name="teleop" pkg="rqt_ground_robot_teleop" type="rqt_ground_robot_teleop" args="/cmd_vel:=/robot/cmd_vel" output="screen" if="$(arg gui)"/>
+
+  <!-- Arrancar el nodo de lectura de imagen -->
+  <node pkg="diff_chaser" type="image_node.py" name="image" output="screen" >
+        <!-- posicion inicial del UAV -->
+        <rosparam param="enable_verbose">False</rosparam>
+  </node>
   
 </launch>
