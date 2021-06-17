@@ -2,6 +2,7 @@
 # nodo encargado de obtener los datos de imagen y extraer informacion
 # acerca de los objetos encontrados
 
+from diff_chaser.msg import camera_data, color_pose
 import rospy
 from sensor_msgs.msg import Image
 import cv2
@@ -36,7 +37,10 @@ class image_processing():
             self.enable_verbose = True
 
         self.img_sub=rospy.Subscriber('/robot/imagen',Image, self.read_img)
-        self.img_pub=rospy.Publisher('/robot/cv_image',Image)
+        self.img_pub=rospy.Publisher('/robot/cv_image',Image, queue_size=10)
+        self.data_pub=rospy.Publisher('/robot/camera_data',camera_data, queue_size=10)
+
+        self.procesed_data = camera_data()
 
     def read_img(self, data):
         self.image_data = self.bridge.imgmsg_to_cv2(data, desired_encoding='passthrough')
@@ -98,6 +102,15 @@ class image_processing():
                 print('Elapsed time: %f'%time_elapsed)
                 print('----------------')
 
+            #construimos el mensaje que se comunicara al central node y lo publicamos
+            self.procesed_data.red.center=int(c_r)
+            self.procesed_data.red.area=int(area_r)
+            self.procesed_data.green.center=int(c_g)
+            self.procesed_data.green.area=int(area_g)
+            self.procesed_data.blue.center=int(c_b)
+            self.procesed_data.blue.area=int(area_b)
+            self.data_pub.publish(self.procesed_data)
+
             #anhadimos informacion al frame actual para publicarlo
             if c_r>=0:
                 img = cv2.circle(img, (c_r,128/2), radius=5, color=(255, 255, 255), thickness=-1)
@@ -113,6 +126,8 @@ class image_processing():
 
             image_message = self.bridge.cv2_to_imgmsg(img, encoding="rgb8")
             self.img_pub.publish(image_message)
+
+
             rate.sleep()
 
 

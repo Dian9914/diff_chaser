@@ -18,7 +18,7 @@
 
   <arg name="escena" default="$(find diff_chaser)/scenes/default_scene.ttt"/>
   <arg name="sim_time" default="true" />
-  <arg name="cfg_rviz" default= "$(find diff_chaser)/config/config_pioneer.rviz" />
+  <arg name="cfg_rviz" default= "$(find diff_chaser)/config/diff_rviz.rviz" />
   <arg name="auto_fin" default="true" />
   <arg name="gui" default="true" />
 

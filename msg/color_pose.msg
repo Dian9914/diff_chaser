@@ -1,2 +1,2 @@
-int8 center
-int8 area
+int32 center
+int32 area
