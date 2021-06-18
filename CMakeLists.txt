@@ -58,8 +58,8 @@ find_package(catkin REQUIRED COMPONENTS
 
 ## Generate services in the 'srv' folder
  add_service_files(
-#   FILES
-#   Service1.srv
+   FILES
+   chase_conf.srv
 #   Service2.srv
  )
 

@@ -2,17 +2,19 @@
 # nodo encargado de obtener los datos de imagen y extraer informacion
 # acerca de los objetos encontrados
 
+#importamos mensajes
 from diff_chaser.msg import camera_data, color_pose
-import rospy
 from sensor_msgs.msg import Image
+
+import rospy
+
+#cv2 y numpy para tratado de imagen, cvbridge para leer las imagenes
 import cv2
 import numpy as np 
-import time
-
 from cv_bridge import CvBridge
 
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
+# time para controlar el tiempo de procesamiento de imagen
+import time
 
 class image_processing():
     def __init__(self):
@@ -44,6 +46,8 @@ class image_processing():
 
     def read_img(self, data):
         self.image_data = self.bridge.imgmsg_to_cv2(data, desired_encoding='passthrough')
+        #la imagen esta espejada, cosa que no nos interesa
+        self.image_data = cv2.flip(self.image_data, 1)
         self.image_flag = True
 
     def findCenter(self, img, low_thresh, high_thresh):
@@ -84,11 +88,14 @@ class image_processing():
     def process_data(self):
         #metodo que lee la imagen cada 0.2s, procesa las posiciones de los objetos y las publica en un topic
         rate=rospy.Rate(5)
+        #primero esperamos a tener senial de imagen
         while not self.image_flag:
             rospy.loginfo('IMAGE_NODE: Waiting for camera feed.')
             rate.sleep()
+
+        #una vez tenemos senial, empezamos a publicar la informacion tratada
+        rospy.loginfo('IMAGE_NODE: Started publishing data.')
         while not rospy.is_shutdown():
-            rospy.loginfo('IMAGE_NODE: Started publishing data.')
             start=time.time()
             img=self.image_data
             (c_r,area_r)=self.findCenter(img,self.low_thresh_red,self.high_thresh_red)
