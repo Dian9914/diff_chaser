@@ -220,9 +220,6 @@ class central_node():
                     break
 
 
-            print tray
-
-
             # a partir de la posicion del mapa indicada por el planificador, obtenemos cuanto hemos de girar
             if tray==0:
                 ref_pos=-30
