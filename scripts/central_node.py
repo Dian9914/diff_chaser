@@ -11,20 +11,6 @@ from diff_chaser.msg import camera_data, velocity_cmd
 #importamos los servicio
 from diff_chaser.srv import chase_conf, start_srv
 
-# Esta clase se utiliza para la planificacion Astar
-class Node():
-        """A node class for A* Pathfinding"""
-
-        def __init__(self, parent=None, position=None):
-            self.parent = parent
-            self.position = position
-
-            self.g = 0
-            self.h = 0
-            self.f = 0
-
-        def __eq__(self, other):
-            return self.position == other.position
 class central_node():
     def __init__(self):
         # parametros de seguimiento
@@ -39,90 +25,6 @@ class central_node():
 
         #ademas aniadimos una bandera para indicar cuando queremos que el control actue
         self.control_flag = False
-
-    # este nodo implementa una planificacion A estrella. Este nodo ha sido codigo de internet
-    def astar(self, maze, start, end):
-        """Returns a list of tuples as a path from the given start to the given end in the given maze"""
-
-        # Create start and end node
-        start_node = Node(None, start)
-        start_node.g = start_node.h = start_node.f = 0
-        end_node = Node(None, end)
-        end_node.g = end_node.h = end_node.f = 0
-
-        # Initialize both open and closed list
-        open_list = []
-        closed_list = []
-
-        # Add the start node
-        open_list.append(start_node)
-
-        # Loop until you find the end
-        while len(open_list) > 0:
-
-            # Get the current node
-            current_node = open_list[0]
-            current_index = 0
-            for index, item in enumerate(open_list):
-                if item.f < current_node.f:
-                    current_node = item
-                    current_index = index
-
-            # Pop current off open list, add to closed list
-            open_list.pop(current_index)
-            closed_list.append(current_node)
-
-            # Found the goal
-            if current_node == end_node:
-                path = []
-                current = current_node
-                while current is not None:
-                    path.append(current.position)
-                    current = current.parent
-                return path[::-1] # Return reversed path
-
-            # Generate children
-            children = []
-            for new_position in [(0, -1), (0, 1), (-1, 0), (1, 0)]: # Adjacent squares
-
-                # Get node position
-                node_position = (current_node.position[0] + new_position[0], current_node.position[1] + new_position[1])
-
-                # Make sure within range
-                if node_position[0] > (len(maze) - 1) or node_position[0] < 0 or node_position[1] > (len(maze[len(maze)-1]) -1) or node_position[1] < 0:
-                    continue
-
-                # Make sure walkable terrain
-                if maze[node_position[0]][node_position[1]] != 0:
-                    continue
-
-                # Create new node
-                new_node = Node(current_node, node_position)
-
-                # Append
-                children.append(new_node)
-
-            # Loop through children
-            for child in children:
-
-                # Child is on the closed list
-                for closed_child in closed_list:
-                    if child == closed_child:
-                        break
-                    else:
-                        # Create the f, g, and h values
-                        child.g = current_node.g + 1
-                        # H: Manhattan distance to end point
-                        child.h = abs(child.position[0] - end_node.position[0]) + abs(child.position[1] - end_node.position[1])
-                        child.f = child.g + child.h
-
-                        # Child is already in the open list
-                        for open_node in open_list:
-                            if child == open_node and child.g >= open_node.g:
-                                break
-                            else:
-                                # Add the child to the open list
-                                open_list.append(child)
 
     def process_data(self, data):
         #primero leemos la informacion referente al color que deseamos seguir y la procesamos para enviar la senial de control
@@ -288,8 +190,7 @@ class central_node():
         self.map[t_rho_map][t_theta_map]=2
         mapa_planner=self.map
         print(mapa_planner) 
-        mapa_planner[t_rho_map][t_theta_map]=0
-        mapa_planner[0]=[0,0,0,0,0,0,0]
+        self.map[0]=[0,0,0,0,0,0,0]
         start = (0, 3) #el punto 0,3 se supone que es donde esta el robot situado en nuestro mapa local
         end = (t_rho_map, t_theta_map)  #este punto es donde esta el objetivo
 
@@ -299,14 +200,22 @@ class central_node():
             ref_dist=self.target_rho
         else:
             #si hay obstaculos o ninguno nos bloquea completamente el camino, planeamos el camino optimo
-            path = self.astar(mapa_planner, start, end)
-
-            #extraemos de la trayectoria el camino a seguir a continuacion, es decir, por que lado esquivar al obstaculo
-            for point in path:
-                tray=point[1]
-                if any(mapa_planner[point[0]]):
-                    print(point)
+            dist_to_target=10
+            for row in range(len(mapa_planner)):
+                if any(mapa_planner[row]):
+                    print mapa_planner[row]
+                    for col in range(len(mapa_planner[row])):
+                        if mapa_planner[row][col]==2:
+                            tray=col
+                            break
+                        if mapa_planner[row][col]==0 and abs(t_theta_map-col)<dist_to_target:
+                            dist_to_target=abs(t_theta_map-col)
+                            tray=col
                     break
+
+
+            print tray
+
 
             # a partir de la posicion del mapa indicada por el planificador, obtenemos cuanto hemos de girar
             if tray==0:
