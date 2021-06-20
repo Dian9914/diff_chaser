@@ -9,7 +9,7 @@ import rospy
 from diff_chaser.msg import camera_data, velocity_cmd
 
 #importamos los servicio
-from diff_chaser.srv import chase_conf
+from diff_chaser.srv import chase_conf, start_srv
 
 # Esta clase se utiliza para la planificacion Astar
 class Node():
@@ -28,14 +28,17 @@ class Node():
 class central_node():
     def __init__(self):
         # parametros de seguimiento
-        self.max_lin = 1    #velocidad lineal maxima a la que se persiguen objetos
-        self.max_ang = 1    #velocidad angular maxima a la que se persiguen objetos
+        self.max_lin = 10    #velocidad lineal maxima a la que se persiguen objetos
+        self.max_ang = 10    #velocidad angular maxima a la que se persiguen objetos
         self.target_color = 'r'  #color que se persigue, de serie es rojo, todos los demas se evitan
 
         #para que el robot tenga "memoria", es necesario que recuerde las posiciones anteriores. Como 
         #situacion inicial supondremos que el objetivo esta en algun lugar a nuestra derecha muy lejos
-        self.target_rho_ant = 10000
+        self.target_rho_ant = 500
         self.target_theta_ant = 120
+
+        #ademas aniadimos una bandera para indicar cuando queremos que el control actue
+        self.control_flag = False
 
     # este nodo implementa una planificacion A estrella. Este nodo ha sido codigo de internet
     def astar(self, maze, start, end):
@@ -105,23 +108,24 @@ class central_node():
                 # Child is on the closed list
                 for closed_child in closed_list:
                     if child == closed_child:
-                        continue
+                        break
+                    else:
+                        # Create the f, g, and h values
+                        child.g = current_node.g + 1
+                        # H: Manhattan distance to end point
+                        child.h = abs(child.position[0] - end_node.position[0]) + abs(child.position[1] - end_node.position[1])
+                        child.f = child.g + child.h
 
-                # Create the f, g, and h values
-                child.g = current_node.g + 1
-                child.h = ((child.position[0] - end_node.position[0]) ** 2) + ((child.position[1] - end_node.position[1]) ** 2)
-                child.f = child.g + child.h
-
-                # Child is already in the open list
-                for open_node in open_list:
-                    if child == open_node and child.g > open_node.g:
-                        continue
-
-                # Add the child to the open list
-                open_list.append(child)
+                        # Child is already in the open list
+                        for open_node in open_list:
+                            if child == open_node and child.g >= open_node.g:
+                                break
+                            else:
+                                # Add the child to the open list
+                                open_list.append(child)
 
     def process_data(self, data):
-        #primero leemos la informacion referente al color que deseamos seguir y la procesamos para enviar la señal de control
+        #primero leemos la informacion referente al color que deseamos seguir y la procesamos para enviar la senial de control
         # esto se realiza cada vez que recibimos imagenes de la camara, es decir, con una frecuencia de unos 10 Hz
 
         #si un objeto esta en el borde, es probable que no estemos observando la totalidad de sus pixeles.
@@ -160,21 +164,21 @@ class central_node():
             self.obs1_theta = data.green.center
             self.obs1_rho = 500-data.green.area
             self.obs2_theta = data.blue.center
-            self.obs1_rho = 500-data.blue.area
+            self.obs2_rho = 500-data.blue.area
         elif self.target_color == 'g':
             self.target_theta = data.green.center
             self.target_rho = 500-data.green.area
             self.obs1_theta = data.red.center
             self.obs1_rho = 500-data.red.area
             self.obs2_theta = data.blue.center
-            self.obs1_rho = 500-data.blue.area
+            self.obs2_rho = 500-data.blue.area
         elif self.target_color == 'b':
             self.target_theta = data.blue.center
             self.target_rho = 500-data.blue.area
             self.obs1_theta = data.green.center
             self.obs1_rho = 500-data.green.area
             self.obs2_theta = data.red.center
-            self.obs1_rho = 500-data.red.area
+            self.obs2_rho = 500-data.red.area
 
         # una vez tenemos la informacion, comenzamos el control
         # si hay algun obstaculo en nuestro encuadre debemos tenerlo en cuenta para decidir la trayectoria.
@@ -222,17 +226,17 @@ class central_node():
             t_rho_map=1
         elif self.target_rho>=200 and self.target_rho<450:
             t_rho_map=2
-        elif self.target_rho>=450 and self.target_rho<1000:
+        elif self.target_rho>=450:
             t_rho_map=3
 
         # ahora hemos de comprobar si existe un obstaculo y que ademas es el obstaculo mas cercano
-        if (self.obs1_rho<self.target_rho) and (self.obs1_rho!=-1) and (self.obs1_rho<self.obs1_rho):
+        if (self.obs1_rho<self.target_rho) and (self.obs1_theta!=-1) and (self.obs1_rho<self.obs2_rho):
             #si hay un obstaculo, hemos de esquivarlo. Para esquivarlo, primero lo registramos en nuestro mapa local
             if self.obs1_rho<200:
                 obs1_rho_map=1
             elif self.obs1_rho>=200 and self.obs1_rho<450:
                 obs1_rho_map=2
-            elif self.obs1_rho>=450 and self.obs1_rho<1000:
+            elif self.obs1_rho>=450:
                 obs1_rho_map=3
 
             if self.obs1_theta>=0 and self.obs1_theta<51:
@@ -242,17 +246,21 @@ class central_node():
             elif self.obs1_theta>=76 and self.obs1_theta<128:
                 obs1_theta_map=4
 
+            #para asegurarnos de esquivar bien el obstaculo, suponemos los obstaculos mas anchos de lo que son en realidad
             self.map[obs1_rho_map][obs1_theta_map]=1
             self.map[obs1_rho_map][obs1_theta_map-1]=1
             self.map[obs1_rho_map][obs1_theta_map+1]=1
+            if obs1_rho_map==1:
+                self.map[obs1_rho_map][obs1_theta_map-2]=1
+                self.map[obs1_rho_map][obs1_theta_map+2]=1
         
-        if(self.obs1_rho<self.target_rho) and (self.obs1_rho!=-1) and (self.obs1_rho>self.obs1_rho):
+        if(self.obs2_rho<self.target_rho) and (self.obs2_theta!=-1) and (self.obs1_rho>self.obs2_rho):
             # registramos este si es mas cercano que el otro obstaculo
-            if self.obs1_rho<200:
+            if self.obs2_rho<200:
                 obs2_rho_map=1
-            elif self.obs1_rho>=200 and self.obs1_rho<450:
+            elif self.obs2_rho>=200 and self.obs2_rho<450:
                 obs2_rho_map=2
-            elif self.obs1_rho>=450 and self.obs1_rho<1000:
+            elif self.obs2_rho>=450:
                 obs2_rho_map=3
 
             if self.obs2_theta>=0 and self.obs2_theta<51:
@@ -266,6 +274,10 @@ class central_node():
             self.map[obs2_rho_map][obs2_theta_map-1]=1
             self.map[obs2_rho_map][obs2_theta_map]=1
             self.map[obs2_rho_map][obs2_theta_map+1]=1
+            if obs2_rho_map==1:
+                self.map[obs2_rho_map][obs2_theta_map-2]=1
+                self.map[obs2_rho_map][obs2_theta_map+2]=1
+
         
         #a continuacion hemos de tomar una decision respecto a la trayectoria a tomar segun el mapa 
         #utilizaremos un algoritmo de planificacion Astar, aunque la unica informacion que usaremos de esta
@@ -281,14 +293,10 @@ class central_node():
         start = (0, 3) #el punto 0,3 se supone que es donde esta el robot situado en nuestro mapa local
         end = (t_rho_map, t_theta_map)  #este punto es donde esta el objetivo
 
-        if self.obs1_theta==-1 and self.obs1_rho>self.target_rho and self.obs2_theta==-1 and self.obs1_rho>self.target_rho:
+        if self.obs1_theta==-1 and self.obs1_rho>self.target_rho and self.obs2_theta==-1 and self.obs2_rho>self.target_rho:
             #si no se encuentran obstaculos en el camino, directaemente seguimos al objetivo, sin necesidad de llamar al planificador
             ref_pos=self.target_theta
             ref_dist=self.target_rho
-        elif (mapa_planner[1][3]==1 and mapa_planner[1][4]==1) and (mapa_planner[1][2]==1):
-            #si tenemos un obstaculo bloqueandonos completamente, daremos marcha atras mientras seguimos girando en busca del objetivo
-            ref_pos=self.target_theta
-            ref_dist=-1000
         else:
             #si hay obstaculos o ninguno nos bloquea completamente el camino, planeamos el camino optimo
             path = self.astar(mapa_planner, start, end)
@@ -297,6 +305,7 @@ class central_node():
             for point in path:
                 tray=point[1]
                 if any(mapa_planner[point[0]]):
+                    print(point)
                     break
 
             # a partir de la posicion del mapa indicada por el planificador, obtenemos cuanto hemos de girar
@@ -315,19 +324,25 @@ class central_node():
             elif tray==6:
                 ref_pos=160
 
-            ref_dist=self.target_rho
+
+            if (mapa_planner[1][3]==1 and mapa_planner[1][4]==1) and (mapa_planner[1][2]==1):
+                #si tenemos un obstaculo bloqueandonos completamente, nos paramos mientras seguimos girando en busca del objetivo
+                ref_dist=0
+            else:
+                #si la via esta libre, seguimos avanzando hacia el objetivo
+                ref_dist=self.target_rho
 
         # finalmente almacenamos los valores obtenidos del objetivo para usarlos en la siguiente iteracion
         self.target_theta_ant=self.target_theta
         self.target_rho_ant=self.target_rho
         
         # a continuacion hemos de calcular la accion del control
-        # usamos para ello un controlador PI
+        # usamos para ello un controlador P
         err_pos=64-ref_pos
         err_dist=ref_dist
 
-        lin_vel=err_dist*0.05
-        ang_vel=err_pos*0.03
+        lin_vel=err_dist*0.005
+        ang_vel=err_pos*0.03125
                 
 
         #finalmente, publicamos la accion de control debidamente saturada
@@ -346,10 +361,34 @@ class central_node():
         else:
             vel_action.angular=ang_vel
 
-        self.action_pub.publish(vel_action)
+        #solo se publicara la accion de control si la bandera esta alzada, es decir
+        #si le hemos comunicado al nodo por medio de un servicio que queremos que persiga al objeto
+        #si no, simplemente se detiene
+        if self.control_flag:
+            self.action_pub.publish(vel_action)
+        else:
+            vel_action.angular=0.0
+            vel_action.lineal=0.0
+            self.action_pub.publish(vel_action)
+
+    def start_chase(self, request):
+        #este es el handler del servicio que inicia la marcha
+        #este servicio permite iniciar la persecucucion con el color que elijamos
+        self.control_flag=request.start
+
+        if request.color:
+            if request.color == 'r' or request.color == 'g' or request.color == 'b':
+                # si es un color valido, se cambia el parametro
+                self.target_color = request.color  
+            else:
+                # si no es valido, se imprime un mensaje de error y no se cambia nada
+                rospy.logerr('CENTRAL_NODE: Unrecogniced color input.') 
+                return False 
+
+        return True
 
     def change_params(self, request):
-        # este es el handler del servicio. Cambia los parametros definidos en la llamada al servicio
+        # este es el handler del servicio de configuracion. Cambia los parametros definidos en la llamada al servicio
 
         # si se ha especificado un nuevo color, se evalua la expresion
         if request.color:
@@ -376,6 +415,9 @@ class central_node():
     def start_node(self):
         # creamos el servicio que permite cambiar los parametros de seguimiento
         self.param_service=rospy.Service('/diff/config',chase_conf, self.change_params)
+
+        # creamos el servicio que permite iniciar la accion
+        self.param_service=rospy.Service('/diff/start', start_srv, self.start_chase)
 
         # creamos el publisher para publicar la accion de control
         self.action_pub=rospy.Publisher('/diff/cmd_vel', velocity_cmd, queue_size=10)

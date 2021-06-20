@@ -60,7 +60,7 @@ find_package(catkin REQUIRED COMPONENTS
  add_service_files(
    FILES
    chase_conf.srv
-#   Service2.srv
+   start_srv.srv
  )
 
 ## Generate actions in the 'action' folder

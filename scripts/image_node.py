@@ -61,7 +61,7 @@ class image_processing():
         (cnts ,_) = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2:]
         
         # Seleccionamos el contorno de mayor area como el contorno que seguira nuestro robot
-        # es decir, en caso de encontrar varios objetos rojos, seguira al mas grande
+        # es decir, en caso de encontrar varios objetos de color, seguira al mas grande
         if cnts: 
             max_area=0
             cnt_max=cnts[0]
@@ -75,6 +75,8 @@ class image_processing():
         else:
             return -1, -1
 
+        #finalmente calculamos los momentos, sabiendo que el momento 10 entre el 00 nos da el centro
+        #geometrico de la figura en el eje horizontal
         M = cv2.moments(cnt)
 
         try:
@@ -95,14 +97,20 @@ class image_processing():
         #una vez tenemos senial, empezamos a publicar la informacion tratada
         rospy.loginfo('IMAGE_NODE: Started publishing data.')
         while not rospy.is_shutdown():
+            #usamos time para controlar el tiempo que se tarda entre ejecuciones de codigo
             start=time.time()
+            #guardamos la imagen que queremos tratar para evitar que se nos sobreescriba con otra
+            #durante el proceso
             img=self.image_data
+            #buscamos objetos de los 3 colores que queremos tratar en este sistema
             (c_r,area_r)=self.findCenter(img,self.low_thresh_red,self.high_thresh_red)
             (c_g,area_g)=self.findCenter(img,self.low_thresh_green,self.high_thresh_green)
             (c_b,area_b)=self.findCenter(img,self.low_thresh_blue,self.high_thresh_blue)
+            #finalmente calculamos el tiempo empleado
             end=time.time()
             time_elapsed=end-start
 
+            #si el verbose esta activado, imprimira un resumen de lo obtenido
             if self.enable_verbose:
                 print('RED:\t center: %d \t area: %d'%(c_r,area_r))
                 print('GREEN:\t center: %d \t area: %d'%(c_g,area_g))
@@ -135,12 +143,15 @@ class image_processing():
             image_message = self.bridge.cv2_to_imgmsg(img, encoding="rgb8")
             self.img_pub.publish(image_message)
 
-
+            #finalmente, suspendemos el codigo con sleep. Como indicamos al objeto rate que deseabamos
+            #5Hz, se intentara mantener dormido durante el tiempo necesario para mantener la frecuencia
             rate.sleep()
 
 
 if __name__ == "__main__":
+    #iniciamos el nodo, lo indicamos en consola y inicializamos el objeto
     rospy.init_node('image_node')
     rospy.loginfo('IMAGE_NODE: Node started.')
     obj = image_processing()
+    #iniciamos el procesado de datos
     obj.process_data()
