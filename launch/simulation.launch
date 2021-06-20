@@ -53,7 +53,7 @@
     <!-- Arrancar el nodo de actuacion sobre los motores -->
   <node pkg="diff_chaser" type="control_node.py" name="control" output="screen" />
   
-  <!-- Arrancar el nodo central 
-  <node pkg="diff_chaser" type="central_node.py" name="central" output="screen" />-->
+  <!-- Arrancar el nodo central -->
+  <node pkg="diff_chaser" type="central_node.py" name="central" output="screen" />
 
 </launch>

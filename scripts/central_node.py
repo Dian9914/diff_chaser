@@ -62,25 +62,25 @@ class central_node():
         # define como 500 - el area que ocupa. Cuando estemos muy cerca, esa distancia sera 0. Cuando estemos lejos, se acercara a 500
         if self.target_color == 'r':
             self.target_theta = data.red.center
-            self.target_rho = 500-data.red.area
+            self.target_rho = 480-data.red.area
             self.obs1_theta = data.green.center
-            self.obs1_rho = 500-data.green.area
+            self.obs1_rho = 480-data.green.area
             self.obs2_theta = data.blue.center
-            self.obs2_rho = 500-data.blue.area
+            self.obs2_rho = 480-data.blue.area
         elif self.target_color == 'g':
             self.target_theta = data.green.center
-            self.target_rho = 500-data.green.area
+            self.target_rho = 480-data.green.area
             self.obs1_theta = data.red.center
-            self.obs1_rho = 500-data.red.area
+            self.obs1_rho = 480-data.red.area
             self.obs2_theta = data.blue.center
-            self.obs2_rho = 500-data.blue.area
+            self.obs2_rho = 480-data.blue.area
         elif self.target_color == 'b':
             self.target_theta = data.blue.center
-            self.target_rho = 500-data.blue.area
+            self.target_rho = 480-data.blue.area
             self.obs1_theta = data.green.center
-            self.obs1_rho = 500-data.green.area
+            self.obs1_rho = 480-data.green.area
             self.obs2_theta = data.red.center
-            self.obs2_rho = 500-data.red.area
+            self.obs2_rho = 480-data.red.area
 
         # una vez tenemos la informacion, comenzamos el control
         # si hay algun obstaculo en nuestro encuadre debemos tenerlo en cuenta para decidir la trayectoria.
@@ -126,9 +126,9 @@ class central_node():
         #tambien discretizamos las distancias entre 3 umbrales
         if self.target_rho<200:
             t_rho_map=1
-        elif self.target_rho>=200 and self.target_rho<450:
+        elif self.target_rho>=200 and self.target_rho<430:
             t_rho_map=2
-        elif self.target_rho>=450:
+        elif self.target_rho>=430:
             t_rho_map=3
 
         # ahora hemos de comprobar si existe un obstaculo y que ademas es el obstaculo mas cercano
@@ -136,9 +136,9 @@ class central_node():
             #si hay un obstaculo, hemos de esquivarlo. Para esquivarlo, primero lo registramos en nuestro mapa local
             if self.obs1_rho<200:
                 obs1_rho_map=1
-            elif self.obs1_rho>=200 and self.obs1_rho<450:
+            elif self.obs1_rho>=200 and self.obs1_rho<430:
                 obs1_rho_map=2
-            elif self.obs1_rho>=450:
+            elif self.obs1_rho>=430:
                 obs1_rho_map=3
 
             if self.obs1_theta>=0 and self.obs1_theta<51:
@@ -160,9 +160,9 @@ class central_node():
             # registramos este si es mas cercano que el otro obstaculo
             if self.obs2_rho<200:
                 obs2_rho_map=1
-            elif self.obs2_rho>=200 and self.obs2_rho<450:
+            elif self.obs2_rho>=200 and self.obs2_rho<430:
                 obs2_rho_map=2
-            elif self.obs2_rho>=450:
+            elif self.obs2_rho>=430:
                 obs2_rho_map=3
 
             if self.obs2_theta>=0 and self.obs2_theta<51:
@@ -188,8 +188,6 @@ class central_node():
         #no siempre es facil decidir de forma optima por donde esquivar usando algoritmos simples
 
         self.map[t_rho_map][t_theta_map]=2
-        mapa_planner=self.map
-        print(mapa_planner) 
         self.map[0]=[0,0,0,0,0,0,0]
         start = (0, 3) #el punto 0,3 se supone que es donde esta el robot situado en nuestro mapa local
         end = (t_rho_map, t_theta_map)  #este punto es donde esta el objetivo
@@ -199,16 +197,24 @@ class central_node():
             ref_pos=self.target_theta
             ref_dist=self.target_rho
         else:
-            #si hay obstaculos o ninguno nos bloquea completamente el camino, planeamos el camino optimo
+            #si hay obstaculos o ninguno nos bloquea completamente el camino, planeamos el camino para esquivar
+            #para ello hacemos una sencilla serie de comparaciones
+            #nuestro medidor de como de bueno es un camino es lo mucho que nos aleja del objetivo en la coordenada
+            #polar theta. Esto se mide con la metrica dist to target, que es el valor absoluto de la coordenada theta 
+            #del camino a tomar menos la del objetivo. Se inicializa con un valor alto
             dist_to_target=10
-            for row in range(len(mapa_planner)):
-                if any(mapa_planner[row]):
-                    print mapa_planner[row]
-                    for col in range(len(mapa_planner[row])):
-                        if mapa_planner[row][col]==2:
+            #para cada fila del mapa, buscamos que hayan obstaculos
+            for row in range(len(self.map)):
+                if any(self.map[row]):
+                    #si encontramos obstaculos, miramos columna a columna de la fila buscando elementos
+                    for col in range(len(self.map[row])):
+                        #si encontramos el objetivo antes que otra cosa, simplemente lo seguimos
+                        if self.map[row][col]==2:
                             tray=col
                             break
-                        if mapa_planner[row][col]==0 and abs(t_theta_map-col)<dist_to_target:
+                        #si encontramos un hueco libre por el que pasar, comprobamos como de bueno es y si es el mejor
+                        #encontrado hasta la fecha, lo guardamos como la nueva trayectoria a seguir
+                        if self.map[row][col]==0 and abs(t_theta_map-col)<dist_to_target:
                             dist_to_target=abs(t_theta_map-col)
                             tray=col
                     break
@@ -234,7 +240,7 @@ class central_node():
                 ref_pos=160
 
 
-            if (mapa_planner[1][3]==1 and mapa_planner[1][4]==1) and (mapa_planner[1][2]==1):
+            if (self.map[1][3]==1 and self.map[1][4]==1) and (self.map[1][2]==1):
                 #si tenemos un obstaculo bloqueandonos completamente, nos paramos mientras seguimos girando en busca del objetivo
                 ref_dist=0
             else:
@@ -284,6 +290,11 @@ class central_node():
         #este es el handler del servicio que inicia la marcha
         #este servicio permite iniciar la persecucucion con el color que elijamos
         self.control_flag=request.start
+        if self.control_flag:
+            rospy.loginfo('CENTRAL_NODE: Started actuaction.')
+        else:
+            rospy.loginfo('CENTRAL_NODE: Actuaction ended.')
+
 
         if request.color:
             if request.color == 'r' or request.color == 'g' or request.color == 'b':
